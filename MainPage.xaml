@@ -1,0 +1,931 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="DiskGo.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:DiskGo"
+    AllowDrop="True"
+    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+    DragOver="PageDragOver"
+    Drop="PageDrop"
+    KeyDown="PageKeyDown">
+
+    <Page.Resources>
+        <Style x:Key="CardSurfaceStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+
+        <Style x:Key="ColumnHeaderButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,2" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="TabularTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
+        </Style>
+    </Page.Resources>
+
+    <Grid Padding="12,8,12,10" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Row 0: Top Target Selection & Capacity Strip -->
+        <Border Padding="10,8" Style="{StaticResource CardSurfaceStyle}">
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <DropDownButton
+                    x:Name="TargetButton"
+                    MinWidth="240"
+                    MaxWidth="360"
+                    Height="34"
+                    VerticalAlignment="Center"
+                    HorizontalContentAlignment="Stretch"
+                    ToolTipService.ToolTip="选择要分析的驱动器、文件夹或导入文件">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon x:Name="TargetIcon" FontSize="15" Glyph="&#xEDA2;" />
+                        <TextBlock
+                            x:Name="TargetLabel"
+                            VerticalAlignment="Center"
+                            Text="选择要扫描的位置"
+                            TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <DropDownButton.Flyout>
+                        <MenuFlyout x:Name="TargetMenu" Placement="BottomEdgeAlignedLeft" />
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+
+                <Button
+                    x:Name="ScanButton"
+                    Grid.Column="1"
+                    MinWidth="96"
+                    Height="34"
+                    VerticalAlignment="Center"
+                    Click="ScanClicked"
+                    Style="{ThemeResource AccentButtonStyle}"
+                    ToolTipService.ToolTip="开始或取消扫描 (F5 / Esc)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon x:Name="ScanIcon" FontSize="14" Glyph="&#xE768;" />
+                        <TextBlock x:Name="ScanButtonText" Text="扫描" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <ToggleButton
+                    x:Name="FilterButton"
+                    Grid.Column="2"
+                    Height="34"
+                    VerticalAlignment="Center"
+                    Click="FilterToggled"
+                    ToolTipService.ToolTip="扫描过滤条件 (Ctrl+Shift+F)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="14" Glyph="&#xE71C;" />
+                        <TextBlock Text="筛选" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ToggleButton>
+
+                <ToggleButton
+                    x:Name="FilePaneToggle"
+                    Grid.Column="3"
+                    Height="34"
+                    VerticalAlignment="Center"
+                    Click="FilePaneToggled"
+                    ToolTipService.ToolTip="显示/隐藏文件搜索与详细列表 (Ctrl+F)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="14" Glyph="&#xE721;" />
+                        <TextBlock Text="文件搜索" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ToggleButton>
+
+                <StackPanel
+                    Grid.Column="4"
+                    MinWidth="200"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Spacing="5">
+                    <TextBlock
+                        x:Name="CapacityText"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="尚未扫描"
+                        TextTrimming="CharacterEllipsis"
+                        Typography.NumeralAlignment="Tabular" />
+                    <local:SegmentedBar
+                        x:Name="CapacitySegBar"
+                        MinWidth="260"
+                        MaxWidth="440"
+                        HorizontalAlignment="Right"
+                        Visibility="Collapsed" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Row 1: Collapsible Scan Filter Bar -->
+        <Border
+            x:Name="FilterRow"
+            Grid.Row="1"
+            Padding="10,8"
+            Style="{StaticResource CardSurfaceStyle}"
+            Visibility="Collapsed">
+            <StackPanel Spacing="6">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="IncludeBox" Header="包含规则" PlaceholderText="例如: *.log; size&gt;100MB" />
+                    <TextBox x:Name="ExcludeBox" Grid.Column="1" Header="排除规则" PlaceholderText="例如: *.dll; *.tmp" />
+                    <CheckBox x:Name="FullPathBox" Grid.Column="2" VerticalAlignment="Bottom" Content="匹配完整路径" />
+                    <CheckBox x:Name="RegexBox" Grid.Column="3" VerticalAlignment="Bottom" Content="正则表达式" />
+                    <Button Grid.Column="4" VerticalAlignment="Bottom" Click="ApplyFilterScanClicked" Content="应用并扫描" />
+                    <Button Grid.Column="5" VerticalAlignment="Bottom" Click="ClearFilterClicked" Content="清除" />
+                </Grid>
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="筛选规则将在下次扫描时生效；如需在已扫描的结果中即时检索，请按 Ctrl+F 打开文件搜索。" />
+            </StackPanel>
+        </Border>
+
+        <!-- Row 2: Inline Error / Notification InfoBar -->
+        <InfoBar
+            x:Name="InlineBanner"
+            Grid.Row="2"
+            IsOpen="False"
+            Severity="Error" />
+
+        <!-- Row 3: Main Workspace -->
+        <Grid Grid.Row="3">
+            <!-- Empty State -->
+            <StackPanel
+                x:Name="EmptyState"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12">
+                <FontIcon
+                    FontSize="40"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Glyph="&#xEDA2;" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontSize="15"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="选择一个驱动器或文件夹，然后点击「扫描」" />
+                <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
+                    <Button Click="EmptyPickClicked" Style="{ThemeResource AccentButtonStyle}" Content="选择文件夹..." />
+                    <Button Click="EmptyImportClicked" Content="打开 CSV / MFT..." />
+                </StackPanel>
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Text="支持将文件夹直接拖入此窗口 · 按 F5 开始扫描" />
+            </StackPanel>
+
+            <!-- Initial Scanning State -->
+            <StackPanel
+                x:Name="ScanningState"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12"
+                Visibility="Collapsed">
+                <ProgressRing x:Name="ScanRing" Width="44" Height="44" IsActive="False" />
+                <TextBlock
+                    x:Name="ScanStageText"
+                    HorizontalAlignment="Center"
+                    FontSize="15"
+                    FontWeight="SemiBold"
+                    Text="正在准备扫描..." />
+                <TextBlock
+                    x:Name="ScanCountsText"
+                    HorizontalAlignment="Center"
+                    FontSize="13"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Typography.NumeralAlignment="Tabular" />
+                <Button HorizontalAlignment="Center" Click="ScanClicked" Content="取消扫描 (Esc)" />
+            </StackPanel>
+
+            <!-- Empty Scan Result State -->
+            <StackPanel
+                x:Name="NoResultsState"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="10"
+                Visibility="Collapsed">
+                <TextBlock FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" Text="没有找到文件" />
+                <TextBlock
+                    x:Name="NoResultsHint"
+                    HorizontalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="该位置下没有可显示的扫描项目。" />
+                <Button
+                    x:Name="ClearFilterAndRescanBtn"
+                    HorizontalAlignment="Center"
+                    Click="ClearFilterAndRescanClicked"
+                    Content="清除筛选并重新扫描"
+                    Visibility="Collapsed" />
+            </StackPanel>
+
+            <!-- Results Split Workspace -->
+            <Grid x:Name="Results" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition x:Name="TreeBand" Height="1.15*" MinHeight="140" />
+                    <RowDefinition Height="8" />
+                    <RowDefinition x:Name="MapRow" Height="1*" MinHeight="120" />
+                    <RowDefinition x:Name="MapFileSplitterRow" Height="0" />
+                    <RowDefinition x:Name="FileBand" Height="0" MinHeight="0" />
+                </Grid.RowDefinitions>
+
+                <!-- Subtle Re-scan Progress Bar when refreshing existing result -->
+                <ProgressBar
+                    x:Name="RescanBar"
+                    Grid.Row="0"
+                    Margin="0,0,0,4"
+                    IsIndeterminate="True"
+                    Visibility="Collapsed" />
+
+                <!-- Top Band: Folder Tree + File Types -->
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="260" />
+                        <ColumnDefinition x:Name="TypeSplitterCol" Width="8" />
+                        <ColumnDefinition x:Name="TypeColumn" Width="280" MinWidth="200" MaxWidth="480" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Folder Tree Card -->
+                    <Border Style="{StaticResource CardSurfaceStyle}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="34" />
+                                <RowDefinition Height="28" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <!-- Tree Card Toolbar -->
+                            <Border
+                                Padding="10,0"
+                                Background="{ThemeResource LayerOnMicaBaseAltFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                BorderThickness="0,0,0,1"
+                                CornerRadius="8,8,0,0">
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <FontIcon FontSize="13" Glyph="&#xE8B7;" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock FontSize="13" FontWeight="SemiBold" Text="文件夹结构" VerticalAlignment="Center" />
+                                        <TextBlock
+                                            x:Name="TreeSummaryText"
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            VerticalAlignment="Center"
+                                            Typography.NumeralAlignment="Tabular" />
+                                    </StackPanel>
+                                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                        <Button
+                                            Height="26"
+                                            Padding="8,0"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Click="CollapseAllClicked"
+                                            ToolTipService.ToolTip="折叠到根目录">
+                                            <FontIcon FontSize="12" Glyph="&#xE76D;" />
+                                        </Button>
+                                        <ToggleButton
+                                            x:Name="TypePaneToggle"
+                                            Height="26"
+                                            Padding="8,0"
+                                            IsChecked="True"
+                                            Click="TypePaneToggled"
+                                            ToolTipService.ToolTip="显示/隐藏文件类型面板">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <FontIcon FontSize="12" Glyph="&#xE8FD;" />
+                                                <TextBlock FontSize="12" Text="类型" />
+                                            </StackPanel>
+                                        </ToggleButton>
+                                        <Button
+                                            Height="26"
+                                            Padding="8,0"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            ToolTipService.ToolTip="选择显示的列">
+                                            <FontIcon FontSize="12" Glyph="&#xE71D;" />
+                                            <Button.Flyout>
+                                                <MenuFlyout x:Name="TreeColumnsMenu" />
+                                            </Button.Flyout>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Tree Column Headers -->
+                            <Border
+                                Grid.Row="1"
+                                Padding="10,0"
+                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                BorderThickness="0,0,0,1">
+                                <Border.ContextFlyout>
+                                    <MenuFlyout x:Name="TreeHeaderMenu" />
+                                </Border.ContextFlyout>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="62" />
+                                        <ColumnDefinition Width="46" />
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition x:Name="TreeHdrAllocCol" Width="90" />
+                                        <ColumnDefinition x:Name="TreeHdrFilesCol" Width="74" />
+                                        <ColumnDefinition x:Name="TreeHdrFoldersCol" Width="68" />
+                                        <ColumnDefinition x:Name="TreeHdrModCol" Width="130" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button x:Name="TreeColName" Style="{StaticResource ColumnHeaderButtonStyle}" Click="TreeSortClicked" Tag="Name" Content="名称" />
+                                    <Button x:Name="TreeColPct" Grid.Column="1" HorizontalContentAlignment="Right" Style="{StaticResource ColumnHeaderButtonStyle}" Click="TreeSortClicked" Tag="Percent" Content="占上级" />
+                                    <Button x:Name="TreeColSize" Grid.Column="3" HorizontalContentAlignment="Right" Style="{StaticResource ColumnHeaderButtonStyle}" Click="TreeSortClicked" Tag="Size" Content="大小 ▼" />
+                                    <Button x:Name="TreeColAlloc" Grid.Column="4" HorizontalContentAlignment="Right" Style="{StaticResource ColumnHeaderButtonStyle}" Click="TreeSortClicked" Tag="Allocated" Content="占用" />
+                                    <Button x:Name="TreeColFiles" Grid.Column="5" HorizontalContentAlignment="Right" Style="{StaticResource ColumnHeaderButtonStyle}" Click="TreeSortClicked" Tag="Files" Content="文件" />
+                                    <Button x:Name="TreeColFolders" Grid.Column="6" HorizontalContentAlignment="Right" Style="{StaticResource ColumnHeaderButtonStyle}" Click="TreeSortClicked" Tag="Folders" Content="文件夹" />
+                                    <Button x:Name="TreeColMod" Grid.Column="7" Style="{StaticResource ColumnHeaderButtonStyle}" Click="TreeSortClicked" Tag="Modified" Content="修改时间" />
+                                </Grid>
+                            </Border>
+
+                            <!-- Tree ListView -->
+                            <ListView
+                                x:Name="TreeList"
+                                Grid.Row="2"
+                                DoubleTapped="TreeDoubleTapped"
+                                IsItemClickEnabled="True"
+                                ItemClick="TreeClicked"
+                                KeyDown="TreeKeyDown"
+                                RightTapped="TreeRightTapped"
+                                SelectionMode="Single">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="Padding" Value="10,0" />
+                                        <Setter Property="MinHeight" Value="30" />
+                                        <Setter Property="Height" Value="30" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="local:TreeRow">
+                                        <Grid Height="30" ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="62" />
+                                                <ColumnDefinition Width="46" />
+                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="{x:Bind AllocatedColWidth}" />
+                                                <ColumnDefinition Width="{x:Bind FilesColWidth}" />
+                                                <ColumnDefinition Width="{x:Bind FoldersColWidth}" />
+                                                <ColumnDefinition Width="{x:Bind ModifiedColWidth}" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Grid Margin="{x:Bind Indent}" ColumnSpacing="4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="20" />
+                                                    <ColumnDefinition Width="18" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Button
+                                                    Width="20"
+                                                    Height="22"
+                                                    Padding="0"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Click="TreeExpanderClicked"
+                                                    Tag="{x:Bind}"
+                                                    Visibility="{x:Bind ExpanderVis}">
+                                                    <FontIcon FontSize="10" Glyph="{x:Bind ChevronGlyph}" />
+                                                </Button>
+                                                <FontIcon
+                                                    Grid.Column="1"
+                                                    FontSize="14"
+                                                    Foreground="{x:Bind IconBrush}"
+                                                    Glyph="{x:Bind FolderGlyph}" />
+                                                <TextBlock
+                                                    Grid.Column="2"
+                                                    VerticalAlignment="Center"
+                                                    FontSize="13"
+                                                    Text="{x:Bind Name}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    ToolTipService.ToolTip="{x:Bind Tooltip}" />
+                                            </Grid>
+
+                                            <TextBlock Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" Text="{x:Bind Percent}" />
+                                            <ProgressBar Grid.Column="2" Width="46" Height="4" VerticalAlignment="Center" Maximum="100" Value="{x:Bind PercentValue}" />
+                                            <TextBlock Grid.Column="3" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" Text="{x:Bind Size}" />
+                                            <TextBlock Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" Text="{x:Bind Allocated}" Visibility="{x:Bind AllocatedVis}" />
+                                            <TextBlock Grid.Column="5" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" Text="{x:Bind Files}" Visibility="{x:Bind FilesVis}" />
+                                            <TextBlock Grid.Column="6" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" Text="{x:Bind Folders}" Visibility="{x:Bind FoldersVis}" />
+                                            <TextBlock Grid.Column="7" Style="{StaticResource TabularTextStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Modified}" Visibility="{x:Bind ModifiedVis}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
+                    </Border>
+
+                    <!-- Vertical Splitter -->
+                    <Grid
+                        x:Name="TypeSplitter"
+                        Grid.Column="1"
+                        Background="Transparent"
+                        PointerCaptureLost="TypeSplitterReleased"
+                        PointerMoved="TypeSplitterMoved"
+                        PointerPressed="TypeSplitterPressed"
+                        PointerReleased="TypeSplitterReleased">
+                        <Rectangle Width="2" Height="32" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" RadiusX="1" RadiusY="1" />
+                    </Grid>
+
+                    <!-- File Types Card -->
+                    <Border x:Name="TypePaneCard" Grid.Column="2" Style="{StaticResource CardSurfaceStyle}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="34" />
+                                <RowDefinition Height="28" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <Border
+                                Padding="10,0"
+                                Background="{ThemeResource LayerOnMicaBaseAltFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                BorderThickness="0,0,0,1"
+                                CornerRadius="8,8,0,0">
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <FontIcon FontSize="13" Glyph="&#xE8FD;" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock FontSize="13" FontWeight="SemiBold" Text="文件类型" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <Button
+                                        x:Name="ClearTypeFilterTopBtn"
+                                        HorizontalAlignment="Right"
+                                        Height="22"
+                                        Padding="6,0"
+                                        Click="ClearTypeFilterClicked"
+                                        FontSize="11"
+                                        Content="取消筛选"
+                                        Visibility="Collapsed" />
+                                </Grid>
+                            </Border>
+
+                            <Border
+                                Grid.Row="1"
+                                Padding="10,0"
+                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                BorderThickness="0,0,0,1">
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="14" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="74" />
+                                        <ColumnDefinition Width="46" />
+                                        <ColumnDefinition Width="52" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="扩展名" />
+                                    <TextBlock Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="大小" />
+                                    <TextBlock Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="占比" />
+                                    <TextBlock Grid.Column="4" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="数量" />
+                                </Grid>
+                            </Border>
+
+                            <ListView
+                                x:Name="TypeList"
+                                Grid.Row="2"
+                                IsItemClickEnabled="True"
+                                ItemClick="TypeClicked"
+                                SelectionMode="Single">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="Padding" Value="10,0" />
+                                        <Setter Property="MinHeight" Value="28" />
+                                        <Setter Property="Height" Value="28" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="local:TypeRow">
+                                        <Grid Height="28" ColumnSpacing="6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="14" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="74" />
+                                                <ColumnDefinition Width="46" />
+                                                <ColumnDefinition Width="52" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="11" Height="11" VerticalAlignment="Center" Background="{x:Bind Swatch}" CornerRadius="3" />
+                                            <TextBlock Grid.Column="1" FontSize="13" VerticalAlignment="Center" Text="{x:Bind DisplayName}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="2" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" FontSize="12" Text="{x:Bind Size}" />
+                                            <TextBlock Grid.Column="3" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Percent}" />
+                                            <TextBlock Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Count}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- Horizontal Splitter 1: TreeBand / MapRow -->
+                <Grid
+                    Grid.Row="2"
+                    Background="Transparent"
+                    PointerCaptureLost="TreeSplitterReleased"
+                    PointerMoved="TreeSplitterMoved"
+                    PointerPressed="TreeSplitterPressed"
+                    PointerReleased="TreeSplitterReleased">
+                    <Rectangle Width="48" Height="2" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" RadiusX="1" RadiusY="1" />
+                </Grid>
+
+                <!-- Middle Band: Treemap Card -->
+                <Border Grid.Row="3" Style="{StaticResource CardSurfaceStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="34" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Treemap Header with Breadcrumb & View Options -->
+                        <Border
+                            Padding="10,0"
+                            Background="{ThemeResource LayerOnMicaBaseAltFillColorSecondaryBrush}"
+                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            BorderThickness="0,0,0,1"
+                            CornerRadius="8,8,0,0">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <FontIcon FontSize="13" Glyph="&#xF0E2;" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Auto" VerticalScrollMode="Disabled">
+                                        <StackPanel x:Name="BreadcrumbPanel" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" />
+                                    </ScrollViewer>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                    <DropDownButton
+                                        Height="26"
+                                        Padding="8,0"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        FontSize="12"
+                                        ToolTipService.ToolTip="矩形图显示选项">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <FontIcon FontSize="12" Glyph="&#xE890;" />
+                                            <TextBlock FontSize="12" Text="显示" />
+                                        </StackPanel>
+                                        <DropDownButton.Flyout>
+                                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                <ToggleMenuFlyoutItem x:Name="MapNamesMenuItem" IsChecked="True" Text="显示名称" Click="MapOptionMenuClicked" />
+                                                <ToggleMenuFlyoutItem x:Name="MapFreeMenuItem" IsChecked="False" Text="显示空闲空间" Click="MapOptionMenuClicked" />
+                                                <ToggleMenuFlyoutItem x:Name="MapAllocMenuItem" IsChecked="True" Text="按磁盘占用面积绘图" Click="MapOptionMenuClicked" />
+                                            </MenuFlyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
+                                    <Button x:Name="BackButton" Height="26" Padding="8,0" Background="Transparent" BorderThickness="0" Click="BackClicked" IsEnabled="False" ToolTipService.ToolTip="返回上一级 (Backspace)">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <FontIcon FontSize="11" Glyph="&#xE72B;" />
+                                            <TextBlock FontSize="12" Text="上一级" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Height="26" Padding="8,0" Background="Transparent" BorderThickness="0" Click="ExportPngClicked" ToolTipService.ToolTip="保存矩形图为 PNG">
+                                        <FontIcon FontSize="12" Glyph="&#xE91B;" />
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Treemap Canvas -->
+                        <Border
+                            x:Name="MapBorder"
+                            Grid.Row="1"
+                            CornerRadius="0,0,8,8"
+                            DoubleTapped="MapDoubleTapped"
+                            PointerMoved="MapMoved"
+                            PointerPressed="MapPressed"
+                            RightTapped="MapRightTapped"
+                            SizeChanged="MapSized">
+                            <Image x:Name="MapImage" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Fill" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- Horizontal Splitter 2: MapRow / FileBand -->
+                <Grid
+                    x:Name="MapFileSplitter"
+                    Grid.Row="4"
+                    Background="Transparent"
+                    Visibility="Collapsed"
+                    PointerCaptureLost="MapSplitterReleased"
+                    PointerMoved="MapSplitterMoved"
+                    PointerPressed="MapSplitterPressed"
+                    PointerReleased="MapSplitterReleased">
+                    <Rectangle Width="48" Height="2" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" RadiusX="1" RadiusY="1" />
+                </Grid>
+
+                <!-- Bottom Band: File List Card (Hidden by default, toggled via 文件搜索 / Ctrl+F) -->
+                <Border x:Name="FilePaneCard" Grid.Row="5" Style="{StaticResource CardSurfaceStyle}" Visibility="Collapsed">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="40" />
+                            <RowDefinition x:Name="FileHeaderRowDef" Height="28" />
+                            <RowDefinition x:Name="FileBodyRowDef" Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Search & Duplicates Toolbar -->
+                        <Border
+                            Padding="10,0"
+                            Background="{ThemeResource LayerOnMicaBaseAltFillColorSecondaryBrush}"
+                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            BorderThickness="0,0,0,1"
+                            CornerRadius="8,8,0,0">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="168" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBox
+                                    x:Name="SearchBox"
+                                    Height="28"
+                                    VerticalAlignment="Center"
+                                    PlaceholderText="搜索整个扫描结果中的文件名 (Ctrl+F)..."
+                                    TextChanged="SearchChanged" />
+
+                                <TextBlock
+                                    x:Name="FileSummaryText"
+                                    Grid.Column="1"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    VerticalAlignment="Center"
+                                    Typography.NumeralAlignment="Tabular" />
+
+                                <Button
+                                    x:Name="TypeFilterPill"
+                                    Grid.Column="2"
+                                    Height="24"
+                                    Padding="8,0"
+                                    Click="ClearTypeFilterClicked"
+                                    Visibility="Collapsed"
+                                    ToolTipService.ToolTip="点击取消扩展名筛选">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock x:Name="TypeFilterPillText" FontSize="11" VerticalAlignment="Center" />
+                                        <FontIcon FontSize="9" Glyph="&#xE711;" />
+                                    </StackPanel>
+                                </Button>
+
+                                <ComboBox
+                                    x:Name="DuplicateBox"
+                                    Grid.Column="3"
+                                    Height="28"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Center"
+                                    SelectionChanged="DuplicatesChanged">
+                                    <ComboBoxItem Content="不查找重复项" Tag="none" />
+                                    <ComboBoxItem Content="重复: 名称和大小" Tag="name" />
+                                    <ComboBoxItem Content="重复: 名称/大小/日期" Tag="date" />
+                                </ComboBox>
+
+                                <ToggleButton
+                                    x:Name="DuplicatesOnlyBox"
+                                    Grid.Column="4"
+                                    Height="28"
+                                    Padding="10,0"
+                                    Click="DuplicatesOnlyClicked"
+                                    FontSize="12"
+                                    Content="只看重复项" />
+
+                                <Button
+                                    Grid.Column="5"
+                                    Height="28"
+                                    Padding="8,0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    ToolTipService.ToolTip="选择显示的列">
+                                    <FontIcon FontSize="12" Glyph="&#xE71D;" />
+                                    <Button.Flyout>
+                                        <MenuFlyout x:Name="FileColumnsMenu" />
+                                    </Button.Flyout>
+                                </Button>
+
+                                <Button
+                                    Grid.Column="6"
+                                    Height="28"
+                                    Padding="8,0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Click="CloseFilePaneClicked"
+                                    ToolTipService.ToolTip="隐藏文件列表与搜索面板 (Esc)">
+                                    <FontIcon FontSize="11" Glyph="&#xE711;" />
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <!-- File List Column Headers -->
+                        <Border
+                            x:Name="FileHeaderBar"
+                            Grid.Row="1"
+                            Padding="10,0"
+                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            BorderThickness="0,0,0,1">
+                            <Border.ContextFlyout>
+                                <MenuFlyout x:Name="FileHeaderMenu" />
+                            </Border.ContextFlyout>
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition x:Name="FileHdrAllocCol" Width="90" />
+                                    <ColumnDefinition x:Name="FileHdrPctCol" Width="64" />
+                                    <ColumnDefinition x:Name="FileHdrPathCol" Width="1.2*" />
+                                    <ColumnDefinition x:Name="FileHdrModCol" Width="130" />
+                                    <ColumnDefinition x:Name="FileHdrAttrCol" Width="54" />
+                                    <ColumnDefinition x:Name="FileHdrDupCntCol" Width="0" />
+                                    <ColumnDefinition x:Name="FileHdrDupSizeCol" Width="0" />
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="FileColName" Style="{StaticResource ColumnHeaderButtonStyle}" Click="FileSortClicked" Tag="Name" Content="名称" />
+                                <Button x:Name="FileColSize" Grid.Column="1" HorizontalContentAlignment="Right" Style="{StaticResource ColumnHeaderButtonStyle}" Click="FileSortClicked" Tag="Size" Content="大小 ▼" />
+                                <Button x:Name="FileColAlloc" Grid.Column="2" HorizontalContentAlignment="Right" Style="{StaticResource ColumnHeaderButtonStyle}" Click="FileSortClicked" Tag="Allocated" Content="占用" />
+                                <Button x:Name="FileColPct" Grid.Column="3" HorizontalContentAlignment="Right" Style="{StaticResource ColumnHeaderButtonStyle}" Click="FileSortClicked" Tag="Percent" Content="占全盘" />
+                                <Button x:Name="FileColPath" Grid.Column="4" Style="{StaticResource ColumnHeaderButtonStyle}" Click="FileSortClicked" Tag="Directory" Content="路径" />
+                                <Button x:Name="FileColMod" Grid.Column="5" Style="{StaticResource ColumnHeaderButtonStyle}" Click="FileSortClicked" Tag="Modified" Content="修改时间" />
+                                <Button x:Name="FileColAttr" Grid.Column="6" Style="{StaticResource ColumnHeaderButtonStyle}" Click="FileSortClicked" Tag="Attributes" Content="属性" />
+                                <Button x:Name="FileColDupCnt" Grid.Column="7" HorizontalContentAlignment="Right" Style="{StaticResource ColumnHeaderButtonStyle}" Click="FileSortClicked" Tag="DuplicateCount" Content="重复数" />
+                                <Button x:Name="FileColDupSize" Grid.Column="8" HorizontalContentAlignment="Right" Style="{StaticResource ColumnHeaderButtonStyle}" Click="FileSortClicked" Tag="DuplicateSize" Content="重复大小" />
+                            </Grid>
+                        </Border>
+
+                        <!-- File ListView (Virtualized) -->
+                        <Grid x:Name="FileBodyContainer" Grid.Row="2">
+                            <ListView
+                                x:Name="FileList"
+                                CanDragItems="True"
+                                DoubleTapped="FileDoubleTapped"
+                                DragItemsStarting="FileListDragStarting"
+                                KeyDown="FileKeyDown"
+                                RightTapped="FileRightTapped"
+                                SelectionChanged="FilesSelected"
+                                SelectionMode="Extended">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="Padding" Value="10,0" />
+                                        <Setter Property="MinHeight" Value="30" />
+                                        <Setter Property="Height" Value="30" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="local:FileRow">
+                                        <Grid Height="30" ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="{x:Bind AllocatedColWidth}" />
+                                                <ColumnDefinition Width="{x:Bind PercentColWidth}" />
+                                                <ColumnDefinition Width="{x:Bind PathColWidth}" />
+                                                <ColumnDefinition Width="{x:Bind ModifiedColWidth}" />
+                                                <ColumnDefinition Width="{x:Bind AttributesColWidth}" />
+                                                <ColumnDefinition Width="{x:Bind DupCntColWidth}" />
+                                                <ColumnDefinition Width="{x:Bind DupSizeColWidth}" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Grid ColumnSpacing="6" ToolTipService.ToolTip="{x:Bind Tooltip}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="4" />
+                                                    <ColumnDefinition Width="16" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Width="4" Height="16" VerticalAlignment="Center" Background="{x:Bind TypeSwatch}" CornerRadius="2" />
+                                                <FontIcon Grid.Column="1" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Glyph="{x:Bind Glyph}" />
+                                                <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="13" Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+                                            </Grid>
+
+                                            <TextBlock Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" Text="{x:Bind Size}" />
+                                            <TextBlock Grid.Column="2" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" Text="{x:Bind Allocated}" Visibility="{x:Bind AllocatedVis}" />
+                                            <TextBlock Grid.Column="3" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Percent}" Visibility="{x:Bind PercentVis}" />
+                                            <TextBlock Grid.Column="4" Style="{StaticResource TabularTextStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Directory}" TextTrimming="CharacterEllipsis" Visibility="{x:Bind PathVis}" />
+                                            <TextBlock Grid.Column="5" Style="{StaticResource TabularTextStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Modified}" Visibility="{x:Bind ModifiedVis}" />
+                                            <TextBlock Grid.Column="6" Style="{StaticResource TabularTextStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Attributes}" Visibility="{x:Bind AttributesVis}" />
+                                            <TextBlock Grid.Column="7" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" Text="{x:Bind DuplicateCount}" Visibility="{x:Bind DuplicatesVis}" />
+                                            <TextBlock Grid.Column="8" HorizontalAlignment="Right" Style="{StaticResource TabularTextStyle}" Text="{x:Bind DuplicateSize}" Visibility="{x:Bind DuplicatesVis}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+
+                            <TextBlock
+                                x:Name="EmptyFilesHint"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="没有匹配的文件"
+                                Visibility="Collapsed" />
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- Row 4: Bottom Status Bar -->
+        <Grid Grid.Row="4" ColumnSpacing="12" Padding="2,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <TextBlock
+                    x:Name="StatusText"
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="就绪"
+                    TextTrimming="CharacterEllipsis" />
+                <HyperlinkButton
+                    x:Name="WarningsButton"
+                    Padding="4,0"
+                    FontSize="12"
+                    Click="WarningsClicked"
+                    Visibility="Collapsed" />
+                <HyperlinkButton
+                    x:Name="OpenExportFolderButton"
+                    Padding="4,0"
+                    FontSize="12"
+                    Content="打开导出文件夹"
+                    Click="OpenExportFolderClicked"
+                    Visibility="Collapsed" />
+            </StackPanel>
+
+            <Border
+                x:Name="MonitorBadge"
+                Grid.Column="1"
+                Padding="8,2"
+                Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                CornerRadius="4"
+                Visibility="Collapsed">
+                <TextBlock FontSize="11" Foreground="{ThemeResource SystemFillColorSuccessBrush}" Text="实时监视中" />
+            </Border>
+
+            <TextBlock
+                x:Name="SelectionText"
+                Grid.Column="2"
+                VerticalAlignment="Center"
+                FontSize="12"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Typography.NumeralAlignment="Tabular" />
+
+            <Button
+                x:Name="UnitBadgeButton"
+                Grid.Column="3"
+                Height="24"
+                Padding="8,0"
+                Background="Transparent"
+                BorderThickness="0"
+                FontSize="12"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                ToolTipService.ToolTip="切换大小单位 (Ctrl+1 ~ Ctrl+6)">
+                <Button.Flyout>
+                    <MenuFlyout x:Name="UnitMenu" Placement="TopEdgeAlignedRight" />
+                </Button.Flyout>
+            </Button>
+        </Grid>
+    </Grid>
+</Page>
