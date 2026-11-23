@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using DiskGo.Core;
 using DiskGo.Core.Ntfs;
 using Microsoft.UI.Xaml;
@@ -5,8 +6,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
-using Windows.Storage.Pickers;
-using WinRT.Interop;
 
 namespace DiskGo;
 
@@ -343,28 +342,31 @@ public sealed partial class MainPage
         if (req is null)
             return;
 
-        var picker = new FileSavePicker();
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.Window));
-        if (req.IsTypesExport || req.Options.Format == ExportFormat.Csv)
-            picker.FileTypeChoices.Add("CSV 文件", [".csv"]);
-        else
-            picker.FileTypeChoices.Add("TSV 文件", [".tsv"]);
+        bool csv = req.IsTypesExport || req.Options.Format == ExportFormat.Csv;
+        string? path;
+        try
+        {
+            path = await ShellHelpers.PickSaveFileAsync(req.FileName, csv ? "CSV 文件" : "TSV 文件", csv ? ".csv" : ".tsv");
+        }
+        catch (COMException ex)
+        {
+            ShowError("无法选择保存位置", ex.Message);
+            return;
+        }
 
-        picker.SuggestedFileName = req.FileName;
-        StorageFile? file = await picker.PickSaveFileAsync();
-        if (file is null)
+        if (path is null)
             return;
 
         try
         {
             if (req.IsTypesExport)
-                await Task.Run(() => ExtensionExporter.Export(_result, file.Path));
+                await Task.Run(() => ExtensionExporter.Export(_result, path));
             else
-                await Task.Run(() => CsvExporter.Export(_result, file.Path, req.Options));
+                await Task.Run(() => CsvExporter.Export(_result, path, req.Options));
 
-            _lastExportFolder = Path.GetDirectoryName(file.Path);
+            _lastExportFolder = Path.GetDirectoryName(path);
             OpenExportFolderButton.Visibility = Visibility.Visible;
-            StatusText.Text = "已导出: " + file.Path;
+            StatusText.Text = "已导出: " + path;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

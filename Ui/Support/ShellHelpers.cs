@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
+using Microsoft.Windows.Storage.Pickers;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace DiskGo;
@@ -61,6 +62,48 @@ internal static class ShellHelpers
         var package = new DataPackage();
         package.SetText(text);
         Clipboard.SetContent(package);
+    }
+
+    /// <summary>
+    /// The Windows.Storage pickers fail with E_FAIL while this process is elevated,
+    /// which the manifest requires so the MFT can be read. The Windows App SDK pickers
+    /// are the ones that work from an administrator desktop app.
+    /// </summary>
+    public static async Task<string?> PickFolderAsync()
+    {
+        var picker = new FolderPicker(App.Window.AppWindow.Id)
+        {
+            SuggestedStartLocation = PickerLocationId.ComputerFolder,
+            CommitButtonText = "选择此文件夹",
+        };
+        PickFolderResult result = await picker.PickSingleFolderAsync();
+        return result?.Path;
+    }
+
+    public static async Task<string?> PickOpenFileAsync(params string[] extensions)
+    {
+        var picker = new FileOpenPicker(App.Window.AppWindow.Id)
+        {
+            SuggestedStartLocation = PickerLocationId.ComputerFolder,
+        };
+        foreach (string extension in extensions)
+            picker.FileTypeFilter.Add(extension);
+
+        PickFileResult result = await picker.PickSingleFileAsync();
+        return result?.Path;
+    }
+
+    public static async Task<string?> PickSaveFileAsync(string suggestedName, string label, string extension)
+    {
+        var picker = new FileSavePicker(App.Window.AppWindow.Id)
+        {
+            SuggestedFileName = suggestedName,
+            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            DefaultFileExtension = extension,
+        };
+        picker.FileTypeChoices.Add(label, [extension]);
+        PickFileResult result = await picker.PickSaveFileAsync();
+        return result?.Path;
     }
 
     public static bool ShowFileProperties(string path)

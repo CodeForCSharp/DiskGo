@@ -1,11 +1,10 @@
+using System.Runtime.InteropServices;
 using DiskGo.Core;
 using DiskGo.Core.Ntfs;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
-using Windows.Storage.Pickers;
-using WinRT.Interop;
 
 namespace DiskGo;
 
@@ -117,12 +116,16 @@ public sealed partial class MainPage
 
     private async Task PickFolder()
     {
-        var picker = new FolderPicker();
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.Window));
-        picker.FileTypeFilter.Add("*");
-        StorageFolder? folder = await picker.PickSingleFolderAsync();
-        if (folder is not null)
-            Choose(new[] { folder.Path }, folder.Path, "\uE8B7");
+        try
+        {
+            string? path = await ShellHelpers.PickFolderAsync();
+            if (path is not null)
+                Choose(new[] { path }, path, "\uE8B7");
+        }
+        catch (COMException ex)
+        {
+            ShowError("无法选择文件夹", ex.Message);
+        }
     }
 
     private async Task PickMultipleTargets()
@@ -137,16 +140,21 @@ public sealed partial class MainPage
 
     private async Task PickImport()
     {
-        var picker = new FileOpenPicker();
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.Window));
-        picker.FileTypeFilter.Add(".csv");
-        picker.FileTypeFilter.Add(".tsv");
-        picker.FileTypeFilter.Add(".mft");
-        StorageFile? file = await picker.PickSingleFileAsync();
-        if (file is null)
+        string? path;
+        try
+        {
+            path = await ShellHelpers.PickOpenFileAsync(".csv", ".tsv", ".mft");
+        }
+        catch (COMException ex)
+        {
+            ShowError("无法选择文件", ex.Message);
+            return;
+        }
+
+        if (path is null)
             return;
 
-        await OpenImportedFile(file.Path, file.Name);
+        await OpenImportedFile(path, Path.GetFileName(path));
     }
 
     private async Task OpenImportedFile(string filePath, string displayName)

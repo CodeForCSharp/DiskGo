@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using DiskGo.Core;
 using Microsoft.UI.Input;
@@ -6,9 +7,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation;
-using Windows.Storage;
-using Windows.Storage.Pickers;
-using WinRT.Interop;
 
 namespace DiskGo;
 
@@ -196,12 +194,18 @@ public sealed partial class MainPage
         if (pngOptions is null)
             return;
 
-        var picker = new FileSavePicker();
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.Window));
-        picker.FileTypeChoices.Add("PNG 图像", [".png"]);
-        picker.SuggestedFileName = $"DiskGo_Treemap_{DateTime.Now:yyyyMMdd_HHmmss}";
-        StorageFile? file = await picker.PickSaveFileAsync();
-        if (file is null)
+        string? path;
+        try
+        {
+            path = await ShellHelpers.PickSaveFileAsync($"DiskGo_Treemap_{DateTime.Now:yyyyMMdd_HHmmss}", "PNG 图像", ".png");
+        }
+        catch (COMException ex)
+        {
+            ShowError("无法选择保存位置", ex.Message);
+            return;
+        }
+
+        if (path is null)
             return;
 
         long free = pngOptions.ShowFreeSpace && _selected == _result.Root && _result.Drive.IsKnown
@@ -209,7 +213,7 @@ public sealed partial class MainPage
             : 0;
 
         await Treemap.ExportPngAsync(
-            file.Path,
+            path,
             pngOptions.Width,
             pngOptions.Height,
             _selected,
@@ -220,8 +224,8 @@ public sealed partial class MainPage
             pngOptions.Monochrome,
             ActualTheme == ElementTheme.Dark);
 
-        _lastExportFolder = Path.GetDirectoryName(file.Path);
+        _lastExportFolder = Path.GetDirectoryName(path);
         OpenExportFolderButton.Visibility = Visibility.Visible;
-        StatusText.Text = "已保存矩形图: " + file.Path;
+        StatusText.Text = "已保存矩形图: " + path;
     }
 }

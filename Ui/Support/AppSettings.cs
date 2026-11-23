@@ -34,7 +34,7 @@ public sealed class AppSettings
     public bool TreemapFreeSpace { get; set; } = false;
     public bool TreemapByAllocated { get; set; } = true;
 
-    // Layout & window state
+    // Layout & window state. Window size is in device-independent pixels (96 DPI).
     public double WindowWidth { get; set; } = 1280;
     public double WindowHeight { get; set; } = 800;
     public bool WindowMaximized { get; set; }

@@ -1,10 +1,8 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using DiskGo.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Windows.Storage;
-using Windows.Storage.Pickers;
-using WinRT.Interop;
 using IoFileAttributes = System.IO.FileAttributes;
 
 namespace DiskGo;
@@ -309,18 +307,30 @@ internal static class Dialogs
 
         var addBtn = new Button { Content = "添加文件夹..." };
         var removeBtn = new Button { Content = "移除选中", IsEnabled = false };
+        var errorBar = new InfoBar
+        {
+            Severity = InfoBarSeverity.Error,
+            IsOpen = false,
+            IsClosable = false,
+        };
         customList.SelectionChanged += (_, _) => removeBtn.IsEnabled = customList.SelectedItem is string;
 
         addBtn.Click += async (_, _) =>
         {
-            var picker = new FolderPicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.Window));
-            picker.FileTypeFilter.Add("*");
-            StorageFolder? folder = await picker.PickSingleFolderAsync();
-            if (folder is not null && !customFolders.Contains(folder.Path, StringComparer.OrdinalIgnoreCase))
+            try
             {
-                customFolders.Add(folder.Path);
-                RefreshCustomList();
+                string? path = await ShellHelpers.PickFolderAsync();
+                if (path is not null && !customFolders.Contains(path, StringComparer.OrdinalIgnoreCase))
+                {
+                    customFolders.Add(path);
+                    RefreshCustomList();
+                    errorBar.IsOpen = false;
+                }
+            }
+            catch (COMException ex)
+            {
+                errorBar.Message = ex.Message;
+                errorBar.IsOpen = true;
             }
         };
 
@@ -331,13 +341,6 @@ internal static class Dialogs
                 customFolders.Remove(path);
                 RefreshCustomList();
             }
-        };
-
-        var errorBar = new InfoBar
-        {
-            Severity = InfoBarSeverity.Error,
-            IsOpen = false,
-            IsClosable = false,
         };
 
         var dialog = new ContentDialog
@@ -644,12 +647,8 @@ internal static class Dialogs
             return null;
 
         char letter = (char)((ComboBoxItem)driveBox.SelectedItem).Tag;
-        var picker = new FileSavePicker();
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.Window));
-        picker.FileTypeChoices.Add("DiskGo MFT Dump", [".mft"]);
-        picker.SuggestedFileName = $"Drive_{letter}_{DateTime.Now:yyyyMMdd}";
-        StorageFile? file = await picker.PickSaveFileAsync();
-        return file is null ? null : (letter, file.Path);
+        string? path = await ShellHelpers.PickSaveFileAsync($"Drive_{letter}_{DateTime.Now:yyyyMMdd}", "DiskGo MFT Dump", ".mft");
+        return path is null ? null : (letter, path);
     }
 
     public static async Task ShowWarningsAsync(XamlRoot xamlRoot, IReadOnlyList<string> warnings)

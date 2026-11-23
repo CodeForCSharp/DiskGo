@@ -1,6 +1,8 @@
+using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Windows.Graphics;
+using WinRT.Interop;
 
 namespace DiskGo;
 
@@ -31,11 +33,13 @@ public sealed partial class MainWindow : Window
     {
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.PreferredMinimumWidth = 960;
-            presenter.PreferredMinimumHeight = 640;
+            // Settings are device-independent pixels. AppWindow speaks physical pixels.
+            double scale = DisplayScale();
+            presenter.PreferredMinimumWidth = ToScreen(960, scale);
+            presenter.PreferredMinimumHeight = ToScreen(640, scale);
 
-            int width = (int)Math.Clamp(_settings.WindowWidth, 960, 3840);
-            int height = (int)Math.Clamp(_settings.WindowHeight, 640, 2160);
+            int width = ToScreen(Math.Clamp(_settings.WindowWidth, 960, 3840), scale);
+            int height = ToScreen(Math.Clamp(_settings.WindowHeight, 640, 2160), scale);
             AppWindow.Resize(new SizeInt32(width, height));
 
             if (_settings.WindowMaximized)
@@ -51,12 +55,24 @@ public sealed partial class MainWindow : Window
             _settings.WindowMaximized = maximized;
             if (!maximized)
             {
-                _settings.WindowWidth = AppWindow.Size.Width;
-                _settings.WindowHeight = AppWindow.Size.Height;
+                double scale = DisplayScale();
+                _settings.WindowWidth = AppWindow.Size.Width / scale;
+                _settings.WindowHeight = AppWindow.Size.Height / scale;
             }
             _settings.Save();
         }
     }
+
+    private double DisplayScale()
+    {
+        uint dpi = GetDpiForWindow(WindowNative.GetWindowHandle(this));
+        return dpi == 0 ? 1 : dpi / 96d;
+    }
+
+    private static int ToScreen(double dips, double scale) => Math.Max(1, (int)Math.Round(dips * scale));
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(nint hwnd);
 
     private MainPage? Page => RootFrame.Content as MainPage;
 
