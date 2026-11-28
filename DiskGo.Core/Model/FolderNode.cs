@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace DiskGo.Core;
 
 /// <summary>
@@ -96,7 +98,7 @@ public sealed class FolderNode
         {
             int sep = rest.IndexOf(Path.DirectorySeparatorChar);
             ReadOnlySpan<char> segment = sep < 0 ? rest : rest[..sep];
-            if (node._children is null || !node._children.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(segment, out FolderNode? child))
+            if (!node.TryGetChild(segment, out FolderNode? child))
                 return null;
             node = child;
             if (sep < 0)
@@ -116,7 +118,7 @@ public sealed class FolderNode
             ReadOnlySpan<char> segment = sep < 0 ? relative : relative[..sep];
             if (!segment.IsEmpty)
             {
-                if (node._children is null || !node._children.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(segment, out FolderNode? child))
+                if (!node.TryGetChild(segment, out FolderNode? child))
                     return null;
                 node = child;
             }
@@ -146,7 +148,7 @@ public sealed class FolderNode
     internal FolderNode GetOrAddChild(ReadOnlySpan<char> name)
     {
         _children ??= new Dictionary<string, FolderNode>(_names);
-        if (_children.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(name, out FolderNode? existing))
+        if (TryGetChild(name, out FolderNode? existing))
             return existing;
 
         string nameStr = name.ToString();
@@ -365,6 +367,23 @@ public sealed class FolderNode
             foreach (FolderNode child in _children.Values)
                 child.SortBySizeDescending();
         }
+    }
+
+    /// <summary>
+    /// Looks a child up by a path segment without copying it. The volume's
+    /// upcase table supports that directly; a comparer that does not falls
+    /// back to allocating the segment, which is what used to throw.
+    /// </summary>
+    private bool TryGetChild(ReadOnlySpan<char> name, [NotNullWhen(true)] out FolderNode? child)
+    {
+        child = null;
+        if (_children is null)
+            return false;
+
+        if (_children.TryGetAlternateLookup(out Dictionary<string, FolderNode>.AlternateLookup<ReadOnlySpan<char>> lookup))
+            return lookup.TryGetValue(name, out child);
+
+        return _children.TryGetValue(name.ToString(), out child);
     }
 
     /// <summary>Child folders ordered by logical size, largest first.</summary>

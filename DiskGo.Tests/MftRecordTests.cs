@@ -207,6 +207,34 @@ public class MftRecordTests
         Assert.Equal(upcase.GetHashCode("I"), upcase.GetHashCode("\u0131"));
     }
 
+    [Fact]
+    public void UpcaseTable_CanLookAFolderUpWithoutCopyingTheSegment()
+    {
+        byte[] table = new byte[NtfsUpcase.TableBytes];
+        for (int i = 0; i < 65536; i++)
+            BitConverter.TryWriteBytes(table.AsSpan(i * 2), (ushort)char.ToUpperInvariant((char)i));
+
+        NtfsUpcase? upcase = NtfsUpcase.TryFrom(table);
+        Assert.NotNull(upcase);
+
+        var records = new MftFileRecord[42];
+        for (int i = 0; i < records.Length; i++)
+            records[i] = MftFileRecord.Parse(new byte[1024], (ulong)i, ClusterSize);
+        records[5] = Directory(5, parent: 5, name: ".");
+        records[30] = Directory(30, parent: 5, name: "Photos");
+        records[40] = FileRecord(40, parent: 30, "keep.txt");
+
+        (FolderNode root, _) = TreeBuilder.FromMft(records, @"C:\", null, PathFilter.Parse("", "", false), CancellationToken.None, names: upcase);
+
+        // The segment is a span of the path, and the upcase table folds case.
+        // This used to throw: the table was not a span comparer, so the
+        // dictionary refused the lookup.
+        FolderNode? found = root.Find(@"c:\photos");
+
+        Assert.NotNull(found);
+        Assert.Equal("Photos", found.Name);
+    }
+
     private static MftFileRecord Directory(ulong number, ulong parent, string name)
     {
         byte[] record = new byte[1024];

@@ -5,8 +5,12 @@ namespace DiskGo.Core.Ntfs;
 /// of one UTF-16 code unit. NTFS compares file names with this table, which
 /// disagrees with <see cref="StringComparer.OrdinalIgnoreCase"/> for a handful
 /// of characters. When the table cannot be read, callers keep the ordinal comparer.
+///
+/// The span half of the comparer is what lets a dictionary answer a lookup
+/// without copying the path segment into a string first. Folder lookups go
+/// through that path, so the table has to implement it.
 /// </summary>
-internal sealed class NtfsUpcase : IEqualityComparer<string>
+internal sealed class NtfsUpcase : IEqualityComparer<string>, IAlternateEqualityComparer<ReadOnlySpan<char>, string>
 {
     public const int TableBytes = 65536 * 2;
 
@@ -43,7 +47,31 @@ internal sealed class NtfsUpcase : IEqualityComparer<string>
         return true;
     }
 
-    public int GetHashCode(string value)
+    public int GetHashCode(string value) => Hash(value);
+
+    public bool Equals(ReadOnlySpan<char> alternate, string other)
+    {
+        if (alternate.Length != other.Length)
+            return false;
+
+        for (int i = 0; i < other.Length; i++)
+        {
+            if (Fold(alternate[i]) != Fold(other[i]))
+                return false;
+        }
+
+        return true;
+    }
+
+    public int GetHashCode(ReadOnlySpan<char> alternate) => Hash(alternate);
+
+    /// <summary>
+    /// Only used when a span lookup inserts a missing key. Folder lookups never
+    /// do that; they copy the segment themselves before adding a child.
+    /// </summary>
+    public string Create(ReadOnlySpan<char> alternate) => alternate.ToString();
+
+    private int Hash(ReadOnlySpan<char> value)
     {
         var hash = new HashCode();
         foreach (char character in value)

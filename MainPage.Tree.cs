@@ -89,24 +89,7 @@ public sealed partial class MainPage
         foreach (FileEntry file in folder.Files)
             rows.Add(new TreeRow(file, parentSize, childDepth, _settings, dark));
 
-        Comparison<TreeRow> cmp = (_treeSort, _treeSortDesc) switch
-        {
-            (TreeSortColumn.Name, false) => static (a, b) => CompareFolderFirst(a, b) ?? string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase),
-            (TreeSortColumn.Name, true) => static (a, b) => CompareFolderFirst(a, b) ?? string.Compare(b.Name, a.Name, StringComparison.OrdinalIgnoreCase),
-            (TreeSortColumn.Percent, false) => static (a, b) => a.PercentValue.CompareTo(b.PercentValue),
-            (TreeSortColumn.Percent, true) => static (a, b) => b.PercentValue.CompareTo(a.PercentValue),
-            (TreeSortColumn.Allocated, false) => static (a, b) => a.AllocatedBytes.CompareTo(b.AllocatedBytes),
-            (TreeSortColumn.Allocated, true) => static (a, b) => b.AllocatedBytes.CompareTo(a.AllocatedBytes),
-            (TreeSortColumn.Files, false) => static (a, b) => a.FileCountValue.CompareTo(b.FileCountValue),
-            (TreeSortColumn.Files, true) => static (a, b) => b.FileCountValue.CompareTo(a.FileCountValue),
-            (TreeSortColumn.Folders, false) => static (a, b) => a.FolderCountValue.CompareTo(b.FolderCountValue),
-            (TreeSortColumn.Folders, true) => static (a, b) => b.FolderCountValue.CompareTo(a.FolderCountValue),
-            (TreeSortColumn.Modified, false) => static (a, b) => a.ModifiedValue.CompareTo(b.ModifiedValue),
-            (TreeSortColumn.Modified, true) => static (a, b) => b.ModifiedValue.CompareTo(a.ModifiedValue),
-            (TreeSortColumn.Size, false) => static (a, b) => a.SizeBytes.CompareTo(b.SizeBytes),
-            _ => static (a, b) => b.SizeBytes.CompareTo(a.SizeBytes),
-        };
-        rows.Sort(cmp);
+        rows.Sort(TreeRowOrder());
         return rows;
     }
 

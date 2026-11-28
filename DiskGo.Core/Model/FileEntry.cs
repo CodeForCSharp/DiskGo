@@ -16,6 +16,9 @@ public sealed class FileEntry
     }
 
     private string? _fullPath;
+    /// <summary>The folder this file sits in. Null only for a file built without one, such as an imported row.</summary>
+    public FolderNode? Folder => DirectoryNode;
+
     internal FolderNode? DirectoryNode { get; set; }
 
     internal bool HasComputedPath => _fullPath is null && DirectoryNode is not null;

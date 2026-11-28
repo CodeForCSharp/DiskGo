@@ -294,24 +294,215 @@ public sealed partial class MainPage
         if (_result is null)
             return;
 
-        List<string> targets = paths.Where(path => _result.FindFolder(path) != _result.Root).ToList();
+        var targets = new List<(string Path, FileEntry? File, FolderNode? Folder)>();
+        foreach (string path in paths)
+        {
+            FileEntry? file = _result.FindFile(path);
+            FolderNode? folder = file is null ? _result.FindFolder(path) : null;
+            if (file is null && (folder is null || folder == _result.Root))
+                continue;
+            targets.Add((path, file, folder));
+        }
+
         if (targets.Count == 0)
             return;
 
         string? keepFolder = _selected?.FullPath;
         try
         {
-            await Task.Run(() => FileActions.DeleteMany(_result, targets, mode));
-
-            if (keepFolder is not null && _result.FindFolder(keepFolder) is null)
-                keepFolder = _result.Root.FullPath;
-
-            ShowResult(_result, $"已删除 {targets.Count:N0} 项。", keepFolder);
+            await Task.Run(() => FileActions.DeleteMany(_result, targets.Select(static target => target.Path), mode));
+            ApplyDeletion(targets, keepFolder, $"已删除 {targets.Count:N0} 项。");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             ShowError("删除失败", ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Drops the rows that were just deleted and refreshes the numbers of the
+    /// folders that still contain them. The tree stays expanded exactly as it
+    /// was: rebuilding it would fold every folder back up.
+    /// </summary>
+    private void ApplyDeletion(IReadOnlyList<(string Path, FileEntry? File, FolderNode? Folder)> targets, string? keepFolder, string status)
+    {
+        if (_result is null)
+            return;
+
+        var removedFiles = new HashSet<FileEntry>(ReferenceEqualityComparer.Instance);
+        var removedFolders = new HashSet<FolderNode>(ReferenceEqualityComparer.Instance);
+        foreach ((_, FileEntry? file, FolderNode? folder) in targets)
+        {
+            if (file is not null)
+                removedFiles.Add(file);
+            else if (folder is not null)
+                removedFolders.Add(folder);
+        }
+
+        RefreshAncestorRows(removedFolders, removedFiles);
+
+        var restated = new HashSet<FolderNode>(ReferenceEqualityComparer.Instance);
+        foreach (FolderNode folder in removedFolders)
+        {
+            if (folder.Parent is not null)
+                restated.Add(folder.Parent);
+        }
+
+        foreach (FileEntry file in removedFiles)
+        {
+            if (file.Folder is not null)
+                restated.Add(file.Folder);
+        }
+
+        _tree.RefreshAll(rows =>
+        {
+            for (int i = rows.Count - 1; i >= 0; i--)
+            {
+                TreeRow row = rows[i];
+                if (row.File is FileEntry file && removedFiles.Contains(file)
+                    || row.Folder is FolderNode folder && (removedFolders.Contains(folder) || DescendsFrom(folder, removedFolders)))
+                    rows.RemoveAt(i);
+            }
+
+            // Only an expanded folder shows the rows that have to move. A
+            // collapsed one keeps its place; its numbers were rewritten above.
+            foreach (FolderNode parent in restated)
+                RestateChildren(rows, parent);
+        });
+
+        FolderNode? stillThere = keepFolder is null ? null : _result.FindFolder(keepFolder);
+        if (stillThere is null)
+        {
+            stillThere = _result.Root;
+            _selected = stillThere;
+            EnsureTreeExpandedTo(stillThere);
+        }
+
+        if (_result.Files.Count == 0 && _result.Root.Children.Count == 0)
+        {
+            ShowResult(_result, status, stillThere.FullPath);
+            return;
+        }
+
+        _fileColumns.TotalRootSize = _result.Root.Size;
+        TreeSummaryText.Text = $"{_result.Root.FolderCount:N0} 个文件夹 · {_result.Files.Count:N0} 个文件";
+        BackButton.IsEnabled = _selected?.Parent is not null;
+        if (_selected is not null)
+            UpdateBreadcrumb(_selected);
+        ShowCapacity();
+        ShowTypes();
+        ShowFiles();
+        DrawMap();
+        StatusText.Text = status;
+    }
+
+    /// <summary>
+    /// Rewrites the visible rows of every folder whose totals changed: the
+    /// parents of a deleted folder, and the folder a deleted file lived in.
+    /// Expansion and scroll position are left alone.
+    /// </summary>
+    private void RefreshAncestorRows(HashSet<FolderNode> removedFolders, HashSet<FileEntry> removedFiles)
+    {
+        var touched = new HashSet<FolderNode>(ReferenceEqualityComparer.Instance);
+        foreach (FolderNode folder in removedFolders)
+        {
+            for (FolderNode? parent = folder.Parent; parent is not null; parent = parent.Parent)
+                touched.Add(parent);
+        }
+
+        foreach (FileEntry file in removedFiles)
+        {
+            for (FolderNode? parent = file.Folder; parent is not null; parent = parent.Parent)
+                touched.Add(parent);
+        }
+
+        if (touched.Count == 0)
+            return;
+
+        bool dark = ActualTheme == ElementTheme.Dark;
+        for (int i = 0; i < _tree.Count; i++)
+        {
+            TreeRow row = _tree[i];
+            if (row.Folder is FolderNode folder && touched.Contains(folder))
+                _tree[i] = new TreeRow(folder, row.Depth, row.Expanded, _settings, dark);
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the direct children of one expanded folder in the current sort
+    /// order. Deeper rows stay attached to the child they were expanded under,
+    /// so folding the tree back open is not part of a delete.
+    /// </summary>
+    private void RestateChildren(IList<TreeRow> rows, FolderNode parent)
+    {
+        int parentIndex = -1;
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (ReferenceEquals(rows[i].Folder, parent))
+            {
+                parentIndex = i;
+                break;
+            }
+        }
+
+        if (parentIndex < 0 || !rows[parentIndex].Expanded)
+            return;
+
+        int depth = rows[parentIndex].Depth;
+        int end = parentIndex + 1;
+        while (end < rows.Count && rows[end].Depth > depth)
+            end++;
+
+        var blocks = new List<List<TreeRow>>();
+        for (int i = parentIndex + 1; i < end;)
+        {
+            var block = new List<TreeRow> { rows[i] };
+            int childDepth = rows[i].Depth;
+            i++;
+            while (i < end && rows[i].Depth > childDepth)
+                block.Add(rows[i++]);
+            blocks.Add(block);
+        }
+
+        Comparison<TreeRow> order = TreeRowOrder();
+        blocks.Sort((a, b) => order(a[0], b[0]));
+
+        int write = parentIndex + 1;
+        foreach (List<TreeRow> block in blocks)
+        {
+            foreach (TreeRow row in block)
+                rows[write++] = row;
+        }
+    }
+
+    private Comparison<TreeRow> TreeRowOrder()
+        => (_treeSort, _treeSortDesc) switch
+        {
+            (TreeSortColumn.Name, false) => static (a, b) => CompareFolderFirst(a, b) ?? string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase),
+            (TreeSortColumn.Name, true) => static (a, b) => CompareFolderFirst(a, b) ?? string.Compare(b.Name, a.Name, StringComparison.OrdinalIgnoreCase),
+            (TreeSortColumn.Percent, false) => static (a, b) => a.PercentValue.CompareTo(b.PercentValue),
+            (TreeSortColumn.Percent, true) => static (a, b) => b.PercentValue.CompareTo(a.PercentValue),
+            (TreeSortColumn.Allocated, false) => static (a, b) => a.AllocatedBytes.CompareTo(b.AllocatedBytes),
+            (TreeSortColumn.Allocated, true) => static (a, b) => b.AllocatedBytes.CompareTo(a.AllocatedBytes),
+            (TreeSortColumn.Files, false) => static (a, b) => a.FileCountValue.CompareTo(b.FileCountValue),
+            (TreeSortColumn.Files, true) => static (a, b) => b.FileCountValue.CompareTo(a.FileCountValue),
+            (TreeSortColumn.Folders, false) => static (a, b) => a.FolderCountValue.CompareTo(b.FolderCountValue),
+            (TreeSortColumn.Folders, true) => static (a, b) => b.FolderCountValue.CompareTo(a.FolderCountValue),
+            (TreeSortColumn.Modified, false) => static (a, b) => a.ModifiedValue.CompareTo(b.ModifiedValue),
+            (TreeSortColumn.Modified, true) => static (a, b) => b.ModifiedValue.CompareTo(a.ModifiedValue),
+            (TreeSortColumn.Size, false) => static (a, b) => a.SizeBytes.CompareTo(b.SizeBytes),
+            _ => static (a, b) => b.SizeBytes.CompareTo(a.SizeBytes),
+        };
+
+    private static bool DescendsFrom(FolderNode folder, HashSet<FolderNode> ancestors)
+    {
+        for (FolderNode? parent = folder.Parent; parent is not null; parent = parent.Parent)
+        {
+            if (ancestors.Contains(parent))
+                return true;
+        }
+
+        return false;
     }
 
     public void OpenExportDialog()
